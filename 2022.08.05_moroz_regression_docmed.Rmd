@@ -1,0 +1,549 @@
+---
+title: "Введение в регрессионный анализ"
+author: "Гарик Мороз"
+date: "5 августа 2022, ДокМед ЛШ"
+output: 
+  beamer_presentation:
+    df_print: kable
+    latex_engine: xelatex
+    citation_package: natbib
+    includes:
+      in_header: "config/presento.sty"
+always_allow_html: true
+bibliography: bibliography.bib
+csl: apa.csl
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, dev='cairo_pdf', comment = "")
+# setwd("/home/agricolamz/work/materials/2022.08.05_regression_docmed")
+library(tidyverse)
+theme_set(theme_bw() + theme(text = element_text(size = 20)))
+
+# data generation
+library(tidyverse)
+set.seed(42)
+tibble(age = runif(n = 40, min = 30, max = 80),
+       bp = age*rnorm(40, mean = 110, 20)/85+55,
+       treatment = "placebo") %>% 
+  filter(bp < 160,
+         bp > 100) ->
+  df
+
+df %>% 
+  mutate(age = age + round(rnorm(n = nrow(df), mean = 0, sd = 2)),
+         bp = bp-abs(rnorm(n = nrow(df), mean = 0, sd = 0.5)) - age/4,
+         treatment = "drug") %>% 
+  sample_n(20) %>% 
+  bind_rows(df) %>% 
+  mutate(na_plus = abs(age*bp*rnorm(47)/700+140)) %>% 
+  write_csv("data/data.csv")
+  # ggplot(aes(age, bp, color = treatment))+
+  # geom_smooth(method = "lm", se = FALSE)+
+  # geom_point()
+```
+
+# Обо мне
+
+## Не имею никакого отношения к медицине
+
+\pause
+
+```{r}
+knitr::include_graphics("images/giraffe.jpeg", dpi = 400)
+```
+
+Картинка из [@farazmand17: 24]
+
+## Не имею никакого отношения к медицине
+
+* теоретический и может быть даже компьютерный лингвист
+* занимаюсь анализом данных, записал для лингвистов [онлайн-курс](https://openedu.ru/course/hse/RLING/), много лет веду курсы анализа данных в НИУ ВШЭ
+* вел продвинутые треки мастерской АнДан на ЛШ \pause
+* специально подготовился к вашей лекции и полистал статью и книгу с назвнанием *Regression analysis in medical research*
+    * [@faguet84]
+    * [@cleophas21]
+
+# Основы регрессии
+
+## Основы регрессии
+
+Суть регрессионного анализа в моделировании связи между двумя и более переменными при помощи прямой на плоскости. Формула прямой зависит от двух параметров: свободного члена (intercept) и углового коэффициента (slope).
+
+$$y = \beta_0 + \beta_1 \times x$$
+
+* $\beta_0$ -- свободный член (intercept)
+* $\beta_1$ -- угловой коэффициента (slope)
+
+
+## Как провести линию на плоскости?
+
+```{r}
+set.seed(42)
+tibble(x = rnorm(100)+1,
+       y = rnorm(100)+3) %>% 
+  ggplot(aes(x, y))+
+  geom_point(alpha = 0)+
+  geom_hline(yintercept = 0)+
+  geom_vline(xintercept = 0)+
+  geom_abline(intercept = 1, slope = 1, color = "red")+
+  geom_abline(intercept = 2, slope = 2, color = "darkgreen")+
+  geom_abline(intercept = 3, slope = -1, color = "navy")+
+  scale_x_continuous(breaks = -2:4)+
+  scale_y_continuous(breaks = 0:5)+
+  coord_equal()
+```
+
+Какое значение свободного члена у красной прямой?
+
+## Как провести линию на плоскости?
+
+```{r}
+set.seed(42)
+tibble(x = rnorm(100)+1,
+       y = rnorm(100)+3) %>% 
+  ggplot(aes(x, y))+
+  geom_point(alpha = 0)+
+  geom_hline(yintercept = 0)+
+  geom_vline(xintercept = 0)+
+  geom_abline(intercept = 1, slope = 1, color = "red")+
+  geom_abline(intercept = 2, slope = 2, color = "darkgreen")+
+  geom_abline(intercept = 3, slope = -1, color = "navy")+
+  scale_x_continuous(breaks = -2:4)+
+  scale_y_continuous(breaks = 0:5)+
+  coord_equal()
+```
+
+Какое значение свободного члена у зеленой прямой?
+
+## Как провести линию на плоскости?
+
+```{r}
+set.seed(42)
+tibble(x = rnorm(100)+1,
+       y = rnorm(100)+3) %>% 
+  ggplot(aes(x, y))+
+  geom_point(alpha = 0)+
+  geom_hline(yintercept = 0)+
+  geom_vline(xintercept = 0)+
+  geom_abline(intercept = 1, slope = 1, color = "red")+
+  geom_abline(intercept = 2, slope = 2, color = "darkgreen")+
+  geom_abline(intercept = 3, slope = -1, color = "navy")+
+  scale_x_continuous(breaks = -2:4)+
+  scale_y_continuous(breaks = 0:5)+
+  coord_equal()
+```
+
+Какое значение свободного члена у синей прямой?
+
+## Как провести линию на плоскости?
+
+```{r}
+set.seed(42)
+tibble(x = rnorm(100)+1,
+       y = rnorm(100)+3) %>% 
+  ggplot(aes(x, y))+
+  geom_point(alpha = 0)+
+  geom_hline(yintercept = 0)+
+  geom_vline(xintercept = 0)+
+  geom_abline(intercept = 1, slope = 1, color = "red")+
+  geom_abline(intercept = 2, slope = 2, color = "darkgreen")+
+  geom_abline(intercept = 3, slope = -1, color = "navy")+
+  scale_x_continuous(breaks = -2:4)+
+  scale_y_continuous(breaks = 0:5)+
+  coord_equal()
+```
+
+Какое значение углового коэффициента у красной прямой?
+
+## Как провести линию на плоскости?
+
+```{r}
+set.seed(42)
+tibble(x = rnorm(100)+1,
+       y = rnorm(100)+3) %>% 
+  ggplot(aes(x, y))+
+  geom_point(alpha = 0)+
+  geom_hline(yintercept = 0)+
+  geom_vline(xintercept = 0)+
+  geom_abline(intercept = 1, slope = 1, color = "red")+
+  geom_abline(intercept = 2, slope = 2, color = "darkgreen")+
+  geom_abline(intercept = 3, slope = -1, color = "navy")+
+  scale_x_continuous(breaks = -2:4)+
+  scale_y_continuous(breaks = 0:5)+
+  coord_equal()
+```
+
+Какое значение углового коэффициента у зеленой прямой?
+
+## Как провести линию на плоскости?
+
+```{r}
+set.seed(42)
+tibble(x = rnorm(100)+1,
+       y = rnorm(100)+3) %>% 
+  ggplot(aes(x, y))+
+  geom_point(alpha = 0)+
+  geom_hline(yintercept = 0)+
+  geom_vline(xintercept = 0)+
+  geom_abline(intercept = 1, slope = 1, color = "red")+
+  geom_abline(intercept = 2, slope = 2, color = "darkgreen")+
+  geom_abline(intercept = 3, slope = -1, color = "navy")+
+  scale_x_continuous(breaks = -2:4)+
+  scale_y_continuous(breaks = 0:5)+
+  coord_equal()
+```
+
+Какое значение углового коэффициента у синей прямой?
+
+## У нас есть вот такие данные
+
+```{r}
+read_csv("data/data.csv") %>% 
+  mutate(treatment = factor(treatment, levels = c("placebo", "drug"))) ->
+  df
+
+df %>% 
+  filter(treatment == "drug") ->
+  df1
+
+df1 %>% 
+  ggplot(aes(age, bp))+
+  geom_point()+
+  labs(x = "возраст",
+       y = "давление")
+```
+
+## Первый подход
+
+Представим, что мы пытаемся научиться предсказывать данные переменной $Y$, не используя других переменных. Какую меру можно выбрать?
+
+## $y_i = \hat\beta_0 + \epsilon_i$
+
+Представим, что мы пытаемся научиться предсказывать данные переменной $Y$, не используя других переменных. Тогда мы будем использовать формулу в заголовке
+
+* $y_i$ --- $i$-ый элемент вектора значений $Y$ (предсказываемая переменная);
+* $\hat\beta_0$ --- оценка случайного члена (intercept);
+* $\epsilon_i$ --- $i$-ый остаток, разница между оценкой модели ($\hat\beta_0$) и реальным значением $y_i$; весь вектор остатков иногда называют случайным шумом (на графике выделены красным);
+* $i$ --- номер наблюдения.
+
+## $y_i = \hat\beta_0 + \epsilon_i$
+
+```{r}
+df1 %>% 
+  mutate(mean_y = mean(bp)) %>% 
+  ggplot(aes(age, bp))+
+  geom_hline(aes(yintercept = mean_y), color = "blue")+
+  annotate(geom = "label", x = 55, y =130, size = 8,
+           label = latex2exp::TeX(str_c("$y_i$ = ", round(mean(df1$bp), 3), " + $\\epsilon_i$")))+
+  geom_segment(aes(xend = age, yend = mean_y), color = "red", linetype = 2)+
+  geom_point(size = 2)+
+  labs(x = "возраст",
+       y = "давление")
+```
+
+\pause
+
+Все, теперь вы знаете основу регрессионного анализа. \pause Почти.
+
+## $y_i = \hat\beta_0 + \hat\beta_1 \times x_i + \epsilon_i$
+
+Когда мы пытаемся научиться предсказывать данные одной переменной $Y$ при помощи другой переменной $X$, мы получаем формулу в заголовке, где
+
+* $x_i$ --- $i$-ый элемент вектора значений $X$ (предиктор);
+* $y_i$ --- $i$-ый элемент вектора значений $Y$ (предсказываемая переменная);
+* $\hat\beta_0$ --- оценка случайного члена (intercept);
+* $\hat\beta_1$ --- оценка углового коэффициента (slope);
+* $\epsilon_i$ --- $i$-ый остаток, разница между оценкой модели ($\hat\beta_0 + \hat\beta_1 \times x_i$) и реальным значением $y_i$; весь вектор остатков иногда называют случайным шумом (на графике выделены красным);
+* $i$ --- номер наблюдения.
+
+## $y_i = \hat\beta_0 + \hat\beta_1 \times x_i + \epsilon_i$
+
+```{r}
+coef <- round(coef(lm(bp~age, data = df1)), 3)
+
+df1 %>% 
+  ggplot(aes(age, bp))+
+  geom_smooth(se = FALSE, method = "lm")+
+  annotate(geom = "label", x = 55, y = 130, size = 8,
+           label = latex2exp::TeX(str_c("$y_i$ = ", coef[1], " + ", coef[2], "$\\times x_i + \\epsilon_i$")))+
+  geom_segment(aes(xend = age, yend = predict(lm(bp~age, data = df1))), color = "red", linetype = 2)+
+  geom_point(size = 2)+
+  labs(x = "возраст",
+       y = "давление")
+```
+
+## $y_i = \hat\beta_0 + \hat\beta_1 \times x_i + \epsilon_i$
+
+Таким образом, задача регрессии --- оценить параметры $\hat\beta_0$ и $\hat\beta_1$, если нам известны все значения $x_i$ и $y_i$ и мы пытаемся минимизировать значния $\epsilon_i$. В данном конкретном случае, задачу можно решить аналитически и получить следующие формулы:
+
+$$\hat\beta_1 = \frac{(\sum_{i=1}^n x_i\times y_i)-n\times\bar x \times \bar y}{\sum_{i = 1}^n(x_i-\bar x)^2}$$
+
+$$\hat\beta_0 = \bar y - \hat\beta_1\times\bar x$$
+
+## Не волнуйтесь, софт посчитает все за вас.
+
+\pause
+
+```{r}
+knitr::include_graphics("images/machines.png", dpi = 650)
+```
+
+Картинка из [@farazmand17: 48]
+
+## Проба руки
+
+Вот данные:
+
+```
+x: 21, 21, 22.8, 21.4, 18.7, 18.1, 14.3, 24.4, 22.8, 19.2, 17.8, 16.4, 17.3, 15.2
+y: 2.62, 2.875, 2.32, 3.215, 3.44, 3.46, 3.57, 3.19, 3.15, 3.44, 3.44, 4.07, 3.73, 3.78
+```
+
+Попробуйте посчитать коэффициенты регрессии [\alert{вот здесь}](https://antoinesoetewey.shinyapps.io/statistics-202/).
+
+## Проба руки
+
+Вот те же данные, но предиктор и предсказываемая переменная поменяны местами:
+
+```
+x: 2.62, 2.875, 2.32, 3.215, 3.44, 3.46, 3.57, 3.19, 3.15, 3.44, 3.44, 4.07, 3.73, 3.78
+y: 21, 21, 22.8, 21.4, 18.7, 18.1, 14.3, 24.4, 22.8, 19.2, 17.8, 16.4, 17.3, 15.2
+```
+
+Попробуйте посчитать коэффициенты регрессии [\alert{вот здесь}](https://antoinesoetewey.shinyapps.io/statistics-202/).
+
+## Снова рассмотрим наш эксперимент
+
+```{r}
+df1 %>% 
+  ggplot(aes(age, bp))+
+  geom_point()+
+  labs(x = "возраст",
+       y = "давление")
+```
+
+## Снова рассмотрим наш эксперимент
+
+\small
+
+```
+Call:
+lm(formula = bp ~ age, data = df)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-23.149  -7.371   1.265   7.229  18.215 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  81.6241    15.0994   5.406 3.89e-05 ***
+age           0.5945     0.2340   2.541   0.0205 *  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 11.04 on 18 degrees of freedom
+Multiple R-squared:  0.264,	Adjusted R-squared:  0.2231 
+F-statistic: 6.456 on 1 and 18 DF,  p-value: 0.02048
+```
+
+## Снова рассмотрим наш эксперимент
+
+\small
+
+```
+Call: код для вызова регрессии
+lm(formula = bp ~ age, data = df)
+
+Residuals: распределение остатков (должно быть вокруг нуля)
+    Min      1Q  Median      3Q     Max 
+-23.149  -7.371   1.265   7.229  18.215 
+
+Coefficients: оценка коэффициентов
+            Estimate Std. Error      t value  Pr(>|t|)  
+              оценка ст. ошибка t-статистика  p-value  ст. знач.
+(Intercept)  81.6241    15.0994        5.406 3.89e-05  ***
+age           0.5945     0.2340        2.541   0.0205  *  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 11.04 on 18 degrees of freedom
+Multiple R-squared:  0.264,	Adjusted R-squared:  0.2231 
+r-квадрат -- коэффициент корреляции Пирсона в квадрате 
+F-statistic: 6.456 on 1 and 18 DF,  p-value: 0.02048
+p-value в этом месте совпадает с результатом ANOVA
+```
+
+# Усложнение регрессионой модели
+
+## Множественная регрессионая модель
+
+Вообще-то можно инкорпорировать много предикторов в одну регрессию:
+
+$y_i = \hat\beta_0 + \hat\beta_1 \times x^1_i + \hat\beta_2 \times x^2_i ... + \hat\beta_k \times x^k_i + \epsilon_i$
+
+\pause
+
+В таком случае все предикторы просто становятся весами для нашего углового коэффициента. Т. е. регрессия в каком-то смысле ранжирует предикторы.
+
+## $bp_i = 45.0604 + 0.7728 \times age_i + 0.242 \times Na_i + \epsilon_i$
+
+\small
+
+```{r}
+df %>% 
+  lm(bp~age+na_plus, data = .) %>% 
+  summary()
+```
+
+
+## Категориальная переменная
+
+Когда в данных есть категориальная переменная c $n$ возможных значений, то принято ее превращать в $n-1$ фиктивную переменную (dummy variable). Например:
+
+```{r}
+tibble(`цвет глаз` = c("голубые", "карие", "серые", "зеленые"),
+       `→` =  "→",
+       голубые = c(1, 0, 0, 0), 
+       карие  = c(0, 1, 0, 0), 
+       серые  = c(0, 0, 1, 0)) 
+```
+
+\pause
+
+Какие значения примут переменные в случае карих глаз? \pause
+Какие значения примут переменные в случае зеленых глаз?
+
+## Категориальная переменная
+
+```{r}
+library(ggbeeswarm)
+df %>% 
+  group_by(treatment)  %>% 
+  mutate(mv = mean(bp))  %>% 
+  ggplot(aes(treatment, bp))+
+  geom_beeswarm(priority = "density")+
+  geom_point(aes(y = mv), color = "red", size = 6, shape = 8)+
+  labs(x = "лекарство",
+       y = "давление")
+```
+
+## $y_i = \hat\beta_0 + \hat\beta_1 \times \text{dummy treatment}_i + \epsilon_i$
+
+```{r}
+tibble(treatment = c("drug", "placebo"), 
+       `→` =  "→",
+       `dummy treatment`  = c(1, 0))
+```
+
+
+Так как  `dummy_treatment` принимает либо значение 1, либо значение 0, то получается, что модель предсказывает лишь два значения:
+
+$$y_i = \left\{\begin{array}{ll}\hat\beta_0 + \hat\beta_1 \times 1 + \epsilon_i = \hat\beta_0 + \hat\beta_1 + \epsilon_i\text{, если лекарство}\\ 
+\hat\beta_0 + \hat\beta_1 \times 0 + \epsilon_i = \hat\beta_0 + \epsilon_i\text{, если плацебо}
+\end{array}\right.$$
+
+## $y_i = \hat\beta_0 + \hat\beta_1 \times \text{dummy treatment}_i + \epsilon_i$
+
+\small
+
+```{r}
+df %>% 
+  lm(bp~treatment, data =.) %>% 
+  summary()
+```
+
+
+## $y_i = \hat\beta_0 + \hat\beta_1 \times \text{dummy treatment}_i + \epsilon_i$
+
+```{r}
+library(ggbeeswarm)
+df %>% 
+  group_by(treatment)  %>% 
+  mutate(mv = mean(bp))  %>% 
+  ggplot(aes(treatment, bp))+
+  geom_beeswarm(priority = "density")+
+  geom_point(aes(y = mv), color = "red", size = 6, shape = 8)+
+  labs(x = "лекарство",
+       y = "давление")
+```
+
+\pause
+Да, мы запустили регрессию, чтобы посчитать два средних значения.
+
+## А насколько мы уверены в наших линиях?
+
+\pause
+
+Благодаря станадртным ошибкам коэффициентов в выдаче регрессии, можно строить доверительные интервалы:
+
+```{r}
+df %>% 
+  ggplot(aes(age, bp, color = treatment))+
+  geom_smooth(method = "lm")+
+  geom_point()+
+  labs(x = "",
+       y = "давление")
+```
+
+## Я предпочитаю effect plots
+
+```{r}
+library(ggeffects)
+df %>% 
+  lm(bp~age+treatment, data = .) %>% 
+  ggeffect(terms = c("age", "treatment")) %>% 
+  plot()
+```
+
+## А как сравнивать модели?
+
+Есть модели, какая лучше?
+
+* bp ~ age + treatment + Na+
+* bp ~ age + treatment
+* bp ~ age + Na+
+* bp ~ treatment + Na+
+* bp ~ age
+* bp ~ treatment
+* bp ~ Na+
+
+\pause
+
+Люди придумали некоторые методы:
+
+* можно сравнивать статистическую значимость предикторов
+* можно сравнивать $R^2$
+* чаще всего используют так называемые информационные критерии, самый популярный -- AIC (Akaike information criterion). Чем меньше значение, тем модель лучше.
+
+# На какие вопросы отвечает регрессия
+
+## На какие вопросы отвечает регрессия
+
+* оценка коэффициентов
+* проверка стат. значимости коэффициентов
+* проверка стат. значимости модели 
+* интерполяция/эктраполяция значений \pause
+* подбор модели, но это, видимо, не для медицины
+
+# Ограничения на применение регрессии
+
+## Ограничения на применение
+
+* связь между предсказываемой переменной и предикторами должна быть линейной
+    * можно как-то трансформировать переменные (корень, логарифм)
+    * нелинейные регресии (если связь между переменными нелинейна) \pause
+* остатки должны быть нормально распределены \pause
+* дисперсия остатков вокруг регрессионной линии должно быть постоянно (гомоскидастично) \pause
+    * [\alert{см. этот пост про это и предыдущую проблемы}](https://www.qualtrics.com/support/stats-iq/analyses/regression-guides/interpreting-residual-plots-improve-regression/)
+* предикторы не должны коррелировать друг с другом \pause
+* все наблюдения в регрессии должны быть независимы друг от друга
+    * регрессия со смешанными эффектами (если внутри данных есть группировки) \pause
+* предсказываемая переменная должна быть числовой переменной
+    * логистическая (два возможных исхода)
+    * мультиномиальная (больше двух дискретных исходов)
+    * и другие.
+
+# Список литературы
